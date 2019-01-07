@@ -2,59 +2,72 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from oauth2client import file, client, tools
 from httplib2 import Http
-# import datetime
+import datetime
 
 driveScopes = 'https://www.googleapis.com/auth/drive.metadata.readonly'
 sheetsScopes = 'https://www.googleapis.com/auth/spreadsheets.readonly'
 
+weekdays = {0: 'MO', 1: 'TU', 2: 'WE', 3: 'TH', 4: 'FR', 5: 'SA', 6: 'SU'}
 
-def insert_values(temp_chart, values):
+'''
+___date_dict_generator___
+Takes a datetime date object and generates MM/DD/YY strings for a week long period beginning on that day.
+Returns these strings in a dictionary where the key is the first two letters of the associated weekday.
+'''
+def date_dict_generator(date):
+    date_dict = {}
+
+    for i in range(0, 7):
+        date_dict[weekdays[date.weekday()]] = "%02d/%02d/%02d" % (date.month, date.day, date.year % 100)
+
+        date = date + datetime.timedelta(days=1)
+
+    return date_dict
+
+
+'''
+___insert_values_into_chart___
+Takes the current chart dictionary and a set of values for a given playlist sheet and adds those values to the chart.
+Returns the chart after the values have been accounted for.
+'''
+def insert_values_into_chart(temp_chart, values):
     for i in values:
-        if i[0] != "":
-            if temp_chart.get(i[0], "") != "":
-                temp_chart[i[0]] += 1
+        try:
+            val = int(i[0])
+
+            if temp_chart.get(val, "") != "":
+                temp_chart[val] += 1
             else:
-                temp_chart[i[0]] = 1
+                temp_chart[val] = 1
+
+        except ValueError:
+            continue
 
     return temp_chart
 
+'''
+'''
+def show_execute(show_id, s, temp_chart, date):
+    try:
+        result = s.values().get(spreadsheetId=show_id, range=date + "!A4:B200").execute()
 
-def show_execute(show_id, temp_chart, dates, s):
-    playlists_found = 0
-    misreads = 0
-    misread_errors = ""
-
-    for date in dates:
         try:
-            result = s.values().get(spreadsheetId=show_id, range=date + "!A4:B200").execute()
+            wrsu_nums = result.get('values', [])
+            temp_chart = insert_values_into_chart(temp_chart, wrsu_nums)
 
-            try:
-                wrsu_nums = result.get('values', [])
-                temp_chart = insert_values(temp_chart, wrsu_nums)
+        except:
+            return temp_chart, -2, date + ": Playlist was misread. The \'values\' field missing from response"
 
-                playlists_found += 1
+    except HttpError as e:
+        # No such sheet
+        if e.resp.status == 400:
+            return temp_chart, -1, "No playlist with date \"" + date + "\" (as a sheet title) was found."
 
-            except:
-                misreads += 1
-                misread_errors += date + " | "
+        # API call error
+        else:
+            return temp_chart, e.resp.status, e.resp.reason
 
-        except HttpError as e:
-            # No such sheet, this is fine
-            if e.resp.status == 400:
-                continue
-
-            # API call error
-            else:
-                return temp_chart, e.resp.status, e.resp.reason
-
-    if misreads > 0:
-        return temp_chart, -2, str(misreads) + " misreads occurred on the following sheets: " + misread_errors + str(playlists_found) + " playlists were properly read for the given date range"
-
-    elif playlists_found < 1:
-        return temp_chart, -1, "Zero playlists were found for the given date range"
-
-    else:
-        return temp_chart, 0, ""
+    return temp_chart, 0, ""
 
 
 if __name__ == '__main__':
@@ -76,7 +89,7 @@ if __name__ == '__main__':
 
     # Make a list call (Drive)
     results = driveService.files().list(
-        fields="nextPageToken, files(id, name)", q="name contains \"- Show Playlist\"").execute()
+        fields="nextPageToken, files(id, name)", q="name contains \"WRSU_SP\"").execute()
     items = results.get('files', [])
 
     # Load old permissions if possible (Sheets)
@@ -92,6 +105,9 @@ if __name__ == '__main__':
     sheetService = build('sheets', 'v4', http=sheetsCreds.authorize(Http()))
     sheet = sheetService.spreadsheets()
 
+    # Get Date Dictionary
+    dates = date_dict_generator(datetime.datetime(2019, 1, 1))
+
     # Create Chart
     chart = {}
 
@@ -100,7 +116,17 @@ if __name__ == '__main__':
         print("**NO FILES FOUND**")
 
     for item in items:
-        chart, errVal, err = show_execute(item['id'], chart, {"01/03/18", "01/04/18", "01/05/18"}, sheet)
+        sheet_name = item.get('name', "")
+        if len(sheet_name) >= 2:
+            d = dates.get(sheet_name[-2:], "")
+            if d != "":
+                chart, errVal, err = show_execute(item['id'], sheet, chart, d)
+            else:
+                errVal = -3
+                err = "weekday not properly included in sheet title"
+        else:
+            errVal = -4
+            err = "sheet title not found - This doesnt make logical sense..."
 
         if errVal != 0:
             print(item['name'] + ": \"" + err + "\"")
