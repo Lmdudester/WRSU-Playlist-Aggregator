@@ -87,11 +87,14 @@ def get_drive_service(dpath):
     driveStore = file.Storage(dpath)
     driveCreds = driveStore.get()
 
-    # Get api client creds (Drive)
-    if not driveCreds or driveCreds.invalid:
-        flow = client.flow_from_clientsecrets(clientIdPath, driveScopes)
-        tools.run_flow(flow, driveStore)
-        driveCreds = driveStore.get()
+    # Display errors (Drive)
+    if not driveCreds:
+        print("Drive token could not be loaded. Please run updatecreds.py and try again.")
+        exit(1)
+
+    if driveCreds.invalid:
+        print("Drive token has expired. Please run updatecreds.py and try again.")
+        exit(1)
 
     # Build service object used to create drive api calls (Drive)
     return build('drive', 'v3', http=driveCreds.authorize(Http()))
@@ -106,11 +109,13 @@ def get_sheet_service(spath):
     sheetsStore = file.Storage(spath)
     sheetsCreds = sheetsStore.get()
 
-    # Get api client creds (Sheets)
-    if not sheetsCreds or sheetsCreds.invalid:
-        flow = client.flow_from_clientsecrets(clientIdPath, sheetsScopes)
-        tools.run_flow(flow, sheetsStore)
-        sheetsCreds = sheetsStore.get()
+    if not sheetsCreds:
+        print("Sheets token could not be loaded. Please run updatecreds.py and try again.")
+        exit(1)
+
+    if sheetsCreds.invalid:
+        print("Sheets token has expired. Please run updatecreds.py and try again.")
+        exit(1)
 
     # Build service object used to create sheets api calls (Sheets)
     return build('sheets', 'v4', http=sheetsCreds.authorize(Http()))
