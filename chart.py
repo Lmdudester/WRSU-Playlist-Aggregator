@@ -57,7 +57,7 @@ Returns the updated chart.
 '''
 def show_execute(show_id, s, temp_chart, date):
     try:
-        result = s.values().get(spreadsheetId=show_id, range=date + "!A4:B200").execute()
+        result = s.values().get(spreadsheetId=show_id, range=date + "!A4:B900").execute()
 
         try:
             wrsu_nums = result.get('values', [])
