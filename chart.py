@@ -37,6 +37,9 @@ Returns the chart after the values have been accounted for.
 def insert_values_into_chart(temp_chart, values):
     for i in values:
         try:
+            if len(i) == 0:
+                continue
+
             val = int(i[0])
 
             if temp_chart.get(val, "") != "":
@@ -45,7 +48,7 @@ def insert_values_into_chart(temp_chart, values):
                 temp_chart[val] = 1
 
         except ValueError:
-            continue
+            pass
 
     return temp_chart
 
@@ -57,7 +60,7 @@ Returns the updated chart.
 '''
 def show_execute(show_id, s, temp_chart, date):
     try:
-        result = s.values().get(spreadsheetId=show_id, range=date + "!A4:B900").execute()
+        result = s.values().get(spreadsheetId=show_id, range=date + "!A2:B900").execute()
 
         try:
             wrsu_nums = result.get('values', [])
